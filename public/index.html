@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080a0f" />
+    <meta
+      name="description"
+      content="Consulta personajes de REX MU: progreso, ubicación, estadísticas, equipo, inventario y skills."
+    />
+    <title>REX Scanner — Inspector de personajes</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="REX Scanner, inicio">
+        <span class="brand-mark">R</span>
+        <span><strong>REX</strong> Scanner</span>
+      </a>
+      <div id="serverState" class="server-state" aria-live="polite">
+        <span class="status-dot muted"></span>
+        Esperando consulta
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="search-panel" aria-labelledby="searchTitle">
+        <div>
+          <p class="eyebrow">INSPECTOR DE PERSONAJES</p>
+          <h1 id="searchTitle">Encuentra cualquier PJ</h1>
+          <p class="search-copy">Progreso, ubicación, equipo e inventario en una sola ficha.</p>
+        </div>
+
+        <form id="searchForm" class="search-form" autocomplete="off">
+          <label class="sr-only" for="characterName">Nombre del personaje</label>
+          <div class="search-control">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" />
+            </svg>
+            <input
+              id="characterName"
+              name="name"
+              maxlength="10"
+              inputmode="text"
+              placeholder="Ejemplo: DONT"
+              aria-describedby="searchHint"
+              required
+            />
+            <button id="searchButton" type="submit">Buscar</button>
+          </div>
+          <p id="searchHint" class="search-hint">Puedes escribir letras, números, guion o guion bajo.</p>
+        </form>
+
+        <div id="recentSearches" class="recent-searches" hidden>
+          <span>Recientes</span>
+          <div id="recentList" class="recent-list"></div>
+        </div>
+      </section>
+
+      <section id="feedback" class="feedback" aria-live="polite" hidden></section>
+
+      <section id="loadingState" class="loading-state" aria-live="polite" hidden>
+        <span class="loader"></span>
+        <div>
+          <strong>Revisando personaje</strong>
+          <span>Consultando progreso, conexión y objetos…</span>
+        </div>
+      </section>
+
+      <section id="result" class="result" hidden>
+        <article class="identity-card">
+          <div class="class-emblem" id="classEmblem" aria-hidden="true">DL</div>
+          <div class="identity-main">
+            <div class="identity-status-row">
+              <span id="onlineBadge" class="badge"></span>
+              <span id="vipBadge" class="badge vip" hidden>VIP</span>
+            </div>
+            <h2 id="characterTitle">—</h2>
+            <p id="characterSubtitle">—</p>
+          </div>
+          <div class="identity-location">
+            <span class="meta-label">UBICACIÓN ACTUAL</span>
+            <strong id="locationName">—</strong>
+            <span id="locationCoords">—</span>
+          </div>
+          <div class="identity-actions">
+            <button id="refreshButton" class="icon-button" type="button" title="Actualizar ficha" aria-label="Actualizar ficha">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 1 0 2 5.3M20 4v7h-7" /></svg>
+            </button>
+            <button id="shareButton" class="secondary-button" type="button">Copiar resumen</button>
+          </div>
+        </article>
+
+        <div class="quick-stats">
+          <article><span>Nivel</span><strong id="quickLevel">—</strong></article>
+          <article><span>Resets</span><strong id="quickResets">—</strong></article>
+          <article><span>Master Level</span><strong id="quickMaster">—</strong></article>
+          <article><span>Zen</span><strong id="quickZen">—</strong></article>
+          <article><span>Ranking global</span><strong id="quickGlobalRank">—</strong></article>
+          <article><span>Ranking de clase</span><strong id="quickClassRank">—</strong></article>
+        </div>
+
+        <nav class="tabs" aria-label="Secciones del personaje" role="tablist">
+          <button class="tab active" data-tab="summary" role="tab" aria-selected="true">Resumen</button>
+          <button class="tab" data-tab="equipment" role="tab" aria-selected="false">Equipo <span id="equipmentCount">0</span></button>
+          <button class="tab" data-tab="inventory" role="tab" aria-selected="false">Inventario <span id="inventoryCount">0</span></button>
+          <button class="tab" data-tab="skills" role="tab" aria-selected="false">Skills <span id="skillsCount">0</span></button>
+        </nav>
+
+        <div id="summaryPanel" class="tab-panel active" role="tabpanel">
+          <div class="content-grid">
+            <article class="panel">
+              <div class="panel-heading">
+                <div><p class="eyebrow">BUILD ACTUAL</p><h3>Atributos</h3></div>
+                <span id="totalStats" class="panel-total">— pts</span>
+              </div>
+              <div id="statsGrid" class="data-grid"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-heading">
+                <div><p class="eyebrow">REGISTRO</p><h3>Combate</h3></div>
+              </div>
+              <div id="combatGrid" class="data-grid compact"></div>
+            </article>
+
+            <article class="panel guild-panel">
+              <div class="panel-heading">
+                <div><p class="eyebrow">COMUNIDAD</p><h3>Guild</h3></div>
+              </div>
+              <div id="guildContent"></div>
+            </article>
+
+            <article class="panel activity-panel">
+              <div class="panel-heading">
+                <div><p class="eyebrow">ACTIVIDAD</p><h3>Fechas</h3></div>
+              </div>
+              <div id="activityContent" class="timeline"></div>
+            </article>
+          </div>
+        </div>
+
+        <div id="equipmentPanel" class="tab-panel" role="tabpanel" hidden>
+          <article class="panel equipment-panel">
+            <div class="panel-heading">
+              <div><p class="eyebrow">LOADOUT</p><h3>Equipo colocado</h3></div>
+              <span class="privacy-note">Los seriales se mantienen ocultos</span>
+            </div>
+            <div id="equipmentGrid" class="equipment-grid"></div>
+          </article>
+        </div>
+
+        <div id="inventoryPanel" class="tab-panel" role="tabpanel" hidden>
+          <article class="panel inventory-panel">
+            <div class="panel-heading inventory-heading">
+              <div><p class="eyebrow">MOCHILA</p><h3>Inventario</h3></div>
+              <label class="inventory-search">
+                <span class="sr-only">Filtrar inventario</span>
+                <input id="inventorySearch" placeholder="Filtrar objetos…" />
+              </label>
+            </div>
+            <div id="inventoryFilters" class="filter-row">
+              <button class="filter active" data-filter="all">Todos</button>
+              <button class="filter" data-filter="excellent">Excellent</button>
+              <button class="filter" data-filter="ancient">Ancient</button>
+              <button class="filter" data-filter="socket">Sockets</button>
+            </div>
+            <div id="inventoryGrid" class="inventory-grid"></div>
+            <p id="inventoryEmpty" class="empty-message" hidden>No hay objetos que coincidan.</p>
+          </article>
+        </div>
+
+        <div id="skillsPanel" class="tab-panel" role="tabpanel" hidden>
+          <article class="panel">
+            <div class="panel-heading">
+              <div><p class="eyebrow">HABILIDADES</p><h3>Skills detectadas</h3></div>
+              <span id="masterSkillNote" class="panel-total"></span>
+            </div>
+            <div id="skillsGrid" class="skills-grid"></div>
+          </article>
+        </div>
+
+        <div class="updated-row">
+          <span id="updatedAt">—</span>
+          <span>Datos públicos de REX MU</span>
+        </div>
+      </section>
+
+      <section id="emptyState" class="empty-state">
+        <div class="empty-rune">R</div>
+        <h2>Tu próxima ficha empieza aquí</h2>
+        <p>Busca un personaje para ver toda la información pública disponible.</p>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
