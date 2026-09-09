@@ -1,0 +1,11 @@
+{
+  "name": "rex-scanner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check public/app.js && node --check functions/api/character.js",
+    "dev": "npx wrangler pages dev public",
+    "deploy": "npx wrangler pages deploy public --project-name rex-scanner"
+  }
+}
