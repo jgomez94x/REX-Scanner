@@ -85,6 +85,7 @@
             <span class="meta-label">UBICACIÓN ACTUAL</span>
             <strong id="locationName">—</strong>
             <span id="locationCoords">—</span>
+            <span id="locationServer" class="location-server">Servidor: —</span>
           </div>
           <div class="identity-actions">
             <button id="refreshButton" class="icon-button" type="button" title="Actualizar ficha" aria-label="Actualizar ficha">
@@ -102,6 +103,22 @@
           <article><span>Ranking global</span><strong id="quickGlobalRank">—</strong></article>
           <article><span>Ranking de clase</span><strong id="quickClassRank">—</strong></article>
         </div>
+
+        <section class="compare-section panel" aria-labelledby="compareTitle">
+          <div class="panel-heading">
+            <div><p class="eyebrow">CARA A CARA</p><h3 id="compareTitle">Comparar personajes</h3></div>
+            <span id="compareHint" class="panel-total">Consulta otro PJ para ver sus diferencias</span>
+          </div>
+          <form id="compareForm" class="compare-form" autocomplete="off">
+            <label for="compareName">Segundo personaje</label>
+            <div class="compare-controls">
+              <input id="compareName" maxlength="10" placeholder="Ejemplo: DONT" required />
+              <button id="compareButton" type="submit">Comparar</button>
+            </div>
+          </form>
+          <p id="compareError" class="compare-error" role="alert" hidden></p>
+          <div id="compareResult" class="compare-result" hidden></div>
+        </section>
 
         <nav class="tabs" aria-label="Secciones del personaje" role="tablist">
           <button class="tab active" data-tab="summary" role="tab" aria-selected="true">Resumen</button>
@@ -168,6 +185,7 @@
               <button class="filter" data-filter="ancient">Ancient</button>
               <button class="filter" data-filter="socket">Sockets</button>
             </div>
+            <p class="inventory-intro">Pulsa un objeto para ver sus opciones. Cada casilla indica su posición en el inventario.</p>
             <div id="inventoryGrid" class="inventory-grid"></div>
             <p id="inventoryEmpty" class="empty-message" hidden>No hay objetos que coincidan.</p>
           </article>
