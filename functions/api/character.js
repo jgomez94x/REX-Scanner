@@ -87,6 +87,15 @@ async function optional(task, fallback, warnings, label) {
   catch { warnings.push(label); return fallback; }
 }
 
+function characterServer(character, onlinePlayer, status) {
+  // Map a server only when the API explicitly associates this PJ with a subserver.
+  const code = onlinePlayer?.subServerCode ?? onlinePlayer?.serverCode ??
+    character.subServerCode ?? character.serverCode;
+  if (code === undefined || code === null) return null;
+  const match = status?.subServers?.find((server) => Number(server.code) === Number(code));
+  return match?.name || null;
+}
+
 export async function onRequestGet(context) {
   const url = new URL(context.request.url);
   const name = (url.searchParams.get("name") || "").trim();
@@ -103,7 +112,7 @@ export async function onRequestGet(context) {
 
   const encoded = encodeURIComponent(character.name);
   const warnings = [];
-  const [equipment, inventory, skills, history, online, rankings, guildDetail] = await Promise.all([
+  const [equipment, inventory, skills, history, online, rankings, guildDetail, serverStatus] = await Promise.all([
     optional(api(`characters/${encoded}/equipment`, 20).then((r) => r.data), { slots: [] }, warnings, "equipment"),
     optional(api(`characters/${encoded}/inventory`, 20).then((r) => r.data), { slots: [] }, warnings, "inventory"),
     optional(api(`characters/${encoded}/skills`, 20).then((r) => r.data), { skills: [], masterSkills: [] }, warnings, "skills"),
@@ -113,6 +122,7 @@ export async function onRequestGet(context) {
     character.guild?.name
       ? optional(api(`guilds/${encodeURIComponent(character.guild.name)}`, 60).then((r) => r.data), null, warnings, "guild")
       : Promise.resolve(null),
+    optional(api("server/status", 20).then((r) => r.data), null, warnings, "server"),
   ]);
 
   return json({
@@ -126,6 +136,7 @@ export async function onRequestGet(context) {
       online: online.online,
       onlinePlayer: online.player,
       onlineTotal: online.total,
+      characterServer: characterServer(character, online.player, serverStatus),
       rankings,
       guildDetail,
       warnings,
