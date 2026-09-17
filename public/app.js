@@ -6,6 +6,8 @@ const state = {
   payload: null,
   inventoryFilter: "all",
   inventoryQuery: "",
+  comparison: null,
+  compareRequest: 0,
 };
 
 const CLASS_FAMILY = {
@@ -181,8 +183,84 @@ function renderInventory() {
   const slots = state.payload?.inventory?.slots || [];
   const visible = slots.filter(({ item }) => inventoryMatches(item));
   $("#inventoryCount").textContent = slots.length;
-  $("#inventoryGrid").innerHTML = visible.map(({ slotIndex, item }) => itemCard(item, "Inventario", slotIndex)).join("");
+  const groups = new Map();
+  for (const entry of visible.sort((a, b) => a.slotIndex - b.slotIndex)) {
+    const group = Number(entry.item.group);
+    const category = group <= 11 ? "Armas y armaduras" : group <= 13 ? "Accesorios y materiales" : group === 14 ? "Consumibles" : "Otros objetos";
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push(entry);
+  }
+  $("#inventoryGrid").innerHTML = [...groups].map(([category, entries]) => `
+    <section class="inventory-group" aria-label="${esc(category)}">
+      <div class="inventory-group-heading"><h4>${esc(category)}</h4><span>${entries.length} objeto${entries.length === 1 ? "" : "s"}</span></div>
+      <div class="inventory-tiles">${entries.map(({ slotIndex, item }) => {
+        const group = Number(item.group);
+        const excellent = (item.excellentOptionsDecoded || []).length > 0;
+        const rare = excellent || Boolean(item.ancient) || (item.sockets || []).length > 0;
+        const options = (item.excellentOptionsDecoded || []).map((option) => `<li>${esc(option)}</li>`).join("");
+        const flags = itemFlags(item).map((flag) => `<span class="item-tag ${esc(flag.cls || "")}">${esc(flag.text)}</span>`).join("");
+        return `<details class="inventory-tile${rare ? " rare" : ""}">
+          <summary title="${esc(item.name)} ${esc(item.levelDisplay || "")}">
+            <span class="tile-slot">#${esc(slotIndex)}</span>
+            <span class="tile-glyph" aria-hidden="true">${group <= 5 ? "⚔" : group <= 11 ? "⬡" : group <= 13 ? "✧" : "✦"}</span>
+            <span class="tile-name">${esc(item.name)}</span>
+            ${item.level > 0 ? `<span class="tile-level">${esc(item.levelDisplay || `+${item.level}`)}</span>` : ""}
+          </summary>
+          <div class="tile-details"><strong>${esc(item.name)} ${esc(item.levelDisplay || "")}</strong>
+            <span>Casilla #${esc(slotIndex)} · Durabilidad ${esc(item.durability ?? 0)}</span>
+            ${flags ? `<div class="item-tags">${flags}</div>` : ""}
+            ${options ? `<ul>${options}</ul>` : ""}
+          </div>
+        </details>`;
+      }).join("")}</div>
+    </section>`).join("");
   $("#inventoryEmpty").hidden = visible.length > 0;
+}
+
+function comparisonValue(data, key) {
+  const c = data.character;
+  return ({ level: c.level, resets: c.resets, masterLevel: c.masterLevel,
+    zen: c.economy?.zen, strength: c.stats?.strength, dexterity: c.stats?.dexterity,
+    vitality: c.stats?.vitality, energy: c.stats?.energy,
+    kills: c.combat?.kills, deaths: c.combat?.deaths,
+    equipped: data.equipment?.slots?.filter((slot) => slot.item).length,
+    inventory: data.inventory?.slots?.length })[key];
+}
+
+function serverLabel(value) {
+  if (value === "REX-ASIA") return "Asia (REX-ASIA)";
+  if (value === "REX") return "Latam (REX)";
+  return value || "No disponible";
+}
+
+function renderComparison() {
+  const other = state.comparison;
+  const panel = $("#compareResult");
+  if (!other || !state.payload) { panel.hidden = true; panel.innerHTML = ""; return; }
+  const first = state.payload;
+  const rows = [
+    ["Nivel", "level"], ["Resets", "resets"], ["Master Level", "masterLevel"],
+    ["Zen", "zen"], ["Fuerza", "strength"], ["Agilidad", "dexterity"],
+    ["Vitalidad", "vitality"], ["Energía", "energy"],
+    ["Kills", "kills"], ["Deaths", "deaths"],
+    ["Equipo colocado", "equipped"], ["Objetos en mochila", "inventory"],
+  ];
+  panel.innerHTML = `<div class="compare-table" role="table" aria-label="Comparación de personajes">
+    <div class="compare-row compare-head" role="row"><span role="columnheader">Dato</span>
+      <strong role="columnheader">${esc(first.character.name)} <small>${esc(CLASS_FAMILY[first.character.class] || first.character.class)}</small></strong>
+      <strong role="columnheader">${esc(other.character.name)} <small>${esc(CLASS_FAMILY[other.character.class] || other.character.class)}</small></strong></div>
+    <div class="compare-row" role="row"><span role="rowheader">Estado</span><strong role="cell">${first.online ? "🟢 Online" : "🔴 Offline"}</strong><strong role="cell">${other.online ? "🟢 Online" : "🔴 Offline"}</strong></div>
+    <div class="compare-row" role="row"><span role="rowheader">Servidor</span><strong role="cell">${esc(serverLabel(first.characterServer))}</strong><strong role="cell">${esc(serverLabel(other.characterServer))}</strong></div>
+    <div class="compare-row" role="row"><span role="rowheader">Mapa</span><strong role="cell">${esc(first.character.location?.mapName || "—")}</strong><strong role="cell">${esc(other.character.location?.mapName || "—")}</strong></div>
+    <div class="compare-row" role="row"><span role="rowheader">Guild</span><strong role="cell">${esc(first.character.guild?.name || "Sin guild")}</strong><strong role="cell">${esc(other.character.guild?.name || "Sin guild")}</strong></div>
+    <div class="compare-row" role="row"><span role="rowheader">Ranking global</span><strong role="cell">${first.rankings?.globalRank ? `#${number.format(first.rankings.globalRank)}` : "Fuera Top 100"}</strong><strong role="cell">${other.rankings?.globalRank ? `#${number.format(other.rankings.globalRank)}` : "Fuera Top 100"}</strong></div>
+    ${rows.map(([label, key]) => {
+      const a = comparisonValue(first, key), b = comparisonValue(other, key);
+      const diff = a == null || b == null ? "" : `<small class="compare-delta">${b - a >= 0 ? "+" : "−"}${number.format(Math.abs(b - a))} frente al primer PJ</small>`;
+      return `<div class="compare-row" role="row"><span role="rowheader">${label}</span><strong role="cell">${a == null ? "—" : number.format(a)}</strong><strong role="cell">${b == null ? "—" : number.format(b)}${diff}</strong></div>`;
+    }).join("")}
+  </div>`;
+  panel.hidden = false;
 }
 
 function renderSkills(data) {
@@ -214,6 +292,7 @@ function render(data) {
   $("#vipBadge").hidden = !data.rankings?.isVip;
   $("#locationName").textContent = c.location?.mapName || "No disponible";
   $("#locationCoords").textContent = c.location ? `X ${c.location.x} · Y ${c.location.y}` : "Sin coordenadas";
+  $("#locationServer").textContent = `Servidor: ${data.characterServer ? serverLabel(data.characterServer) : "No disponible en la API"}`;
   $("#quickLevel").textContent = number.format(c.level || 0);
   $("#quickResets").textContent = number.format(c.resets || 0);
   $("#quickMaster").textContent = number.format(c.masterLevel || 0);
@@ -227,6 +306,7 @@ function render(data) {
   renderEquipment(data);
   renderInventory();
   renderSkills(data);
+  renderComparison();
 
   $("#emptyState").hidden = true;
   $("#result").hidden = false;
@@ -248,7 +328,19 @@ async function lookup(rawName) {
     const response = await fetch(`/api/character?name=${encodeURIComponent(name)}`, { headers: { Accept: "application/json" } });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload.success) throw new Error(payload.error || "No se pudo consultar el personaje.");
+    if (state.name && state.name.toLowerCase() !== payload.data.character.name.toLowerCase()) {
+      state.compareRequest++;
+      state.comparison = null;
+      $("#compareName").value = "";
+      $("#compareError").hidden = true;
+      $("#compareButton").disabled = false;
+      $("#compareButton").textContent = "Comparar";
+    }
     render(payload.data);
+    if (state.comparison?.character.name.toLowerCase() === payload.data.character.name.toLowerCase()) {
+      state.comparison = null;
+      renderComparison();
+    }
     rememberName(payload.data.character.name);
   } catch (error) {
     $("#result").hidden = true;
@@ -282,7 +374,7 @@ function summaryText() {
   return `${d.online ? "🟢" : "🔴"} ${c.name} está ${d.online ? "ONLINE" : "OFFLINE"}\n` +
     `⚔️ ${CLASS_FAMILY[c.class] || c.class} · Nivel ${number.format(c.level)} · Reset ${number.format(c.resets)}\n` +
     `⭐ Master Level ${number.format(c.masterLevel)}${d.rankings?.isVip ? " · VIP ✅" : ""}\n` +
-    `📍 ${c.location?.mapName || "—"} [${c.location?.x ?? "—"},${c.location?.y ?? "—"}]\n` +
+    `📍 ${c.location?.mapName || "—"} [${c.location?.x ?? "—"},${c.location?.y ?? "—"}] · Servidor: ${serverLabel(d.characterServer)}\n` +
     `💰 ${number.format(c.economy?.zen || 0)} Zen\n` +
     `🎯 ${number.format(combat.kills || 0)} Kills · ${number.format(combat.deaths || 0)} Deaths · K/D ${kd}\n` +
     `🏰 Guild: ${c.guild?.name || "Sin guild"}`;
@@ -304,6 +396,45 @@ $("#refreshButton").addEventListener("click", () => state.name && lookup(state.n
 $("#shareButton").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(summaryText()); toast("Resumen copiado"); }
   catch { toast("No se pudo copiar el resumen"); }
+});
+
+$("#compareForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const name = $("#compareName").value.trim();
+  const error = $("#compareError");
+  if (!/^[a-zA-Z0-9_-]{1,10}$/.test(name)) {
+    error.textContent = "Escribe un nombre válido de hasta 10 caracteres.";
+    error.hidden = false;
+    return;
+  }
+  if (name.toLowerCase() === state.name.toLowerCase()) {
+    error.textContent = "Elige un personaje distinto al primero.";
+    error.hidden = false;
+    return;
+  }
+  const request = ++state.compareRequest;
+  error.hidden = true;
+  $("#compareButton").disabled = true;
+  $("#compareButton").textContent = "Comparando…";
+  try {
+    const response = await fetch(`/api/character?name=${encodeURIComponent(name)}`, { headers: { Accept: "application/json" } });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success) throw new Error(result.error || "No se pudo consultar el PJ.");
+    if (request !== state.compareRequest) return;
+    if (result.data.character.name.toLowerCase() === state.name.toLowerCase()) throw new Error("Elige un personaje distinto al primero.");
+    state.comparison = result.data;
+    renderComparison();
+    rememberName(result.data.character.name);
+  } catch (caught) {
+    if (request !== state.compareRequest) return;
+    error.textContent = caught.message === "CHARACTER_NOT_FOUND" ? "No encontré ese segundo personaje." : caught.message;
+    error.hidden = false;
+  } finally {
+    if (request === state.compareRequest) {
+      $("#compareButton").disabled = false;
+      $("#compareButton").textContent = "Comparar";
+    }
+  }
 });
 
 $(".tabs").addEventListener("click", (event) => {
